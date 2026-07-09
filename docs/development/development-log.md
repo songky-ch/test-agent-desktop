@@ -1,0 +1,279 @@
+# Test Agent Desktop 开发记录
+
+## 2026-07-09 阶段 1: 从 UI 壳子走向架构主干
+
+### 目标
+
+在已有 PySide6 壳子基础上补齐架构图里的主链路:
+
+```text
+Desktop UI -> Application Service -> Config / Document / Agent / RAG / Skill / Export
+Document -> Markdown Store -> RAG -> Agent -> LLM Adapter -> Result Store -> UI
+```
+
+### 当前判断
+
+已有代码能启动 UI, 也能用规则逻辑生成测试点和用例, 但还不是“完整 Agent 架构”:
+
+- Agent 只是同步规则函数, 没有工作流状态。
+- RAG 只是从知识库目录读 Markdown, 没有导入、切分、索引持久化。
+- 模型配置已保存, 但旧实现把 Ollama 和 API Key/Base URL 混在同一组字段里。
+- 生成结果只存在内存中, 没有 Result Store。
+- Skill 能加载和调用, 但没有纳入主流程。
+
+### 开发原则
+
+- 严格沿 PRD 架构图补模块, 不把逻辑塞进 UI。
+- 每个阶段至少有一条端到端可验证链路。
+- LLM、LangGraph、向量库先做可替换接口, 本地仍可无外部服务运行。
+- 所有新增行为先写测试, 再实现。
+- 开发记录只沉淀关键判断、边界和验证结果, 不记录无意义流水账。
+
+### 阶段 1 交付边界
+
+- 新增互斥模型路由: Ollama 本地模型模式和 OpenAI-compatible API 模式解耦。
+- 新增 Agent 工作流状态对象, 明确 `load -> retrieve -> generate_points -> generate_cases -> persist`。
+- RAG 支持导入 Markdown 文档、切分、关键词索引持久化、Top-K 检索。
+- Result Store 保存测试点和测试用例 JSON/Markdown 结果。
+- ApplicationService 串联上述模块。
+
+### 阶段 1 实际实现
+
+- `app/agent/llm_provider.py`: 提供 ModelRouter、OllamaAdapter、OpenAI-compatible Chat Completions 调用适配器。
+- `app/agent/workflow.py`: 用 `WorkflowState` 表达 Agent 编排状态, 当前节点顺序为 `retrieve_context -> generate_test_points -> generate_test_cases`。
+- `app/rag/engine.py`: 支持导入 Markdown、切分段落、保存 `index.json`、按关键词 Top-K 检索。
+- `app/services/result_store.py`: 保存一次生成运行的测试点和测试用例 JSON。
+- `app/services/application_service.py`: 由直接调用规则 Agent 改为通过 `AgentWorkflow` 串联 RAG 和生成流程。
+
+### 阶段 1 验证
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+```
+
+结果: 12 个测试通过。
+
+### 思考精华
+
+- “严格遵守架构图”不等于立即绑定所有重型依赖。当前先把架构边界做实, 让 LLM、LangGraph、FAISS/Chroma 都有明确替换点。
+- UI 不承载业务逻辑。Desktop 只触发 ApplicationService, 这样后续接 LangGraph 或真实向量库不需要重写 UI。
+- RAG 一期优先保证可解释和本地可跑。关键词索引不是最终形态, 但它已经具备导入、切分、持久化、召回这四个稳定接口。
+- Agent Workflow 先用轻量状态机表达节点顺序。后续换成 LangGraph 时, 节点输入输出已经固定, 风险会小很多。
+
+## 2026-07-09 阶段 1.1: 解耦 Ollama 和 API Key 配置
+
+### 文档变化
+
+新版 PRD 明确模型来源是两种互斥模式:
+
+- Ollama 本地模型模式: 不配置 API Key, 不配置 Base URL, 从 `ollama list` 选择本地模型。
+- OpenAI-compatible API 模式: 配置 Base URL、API Key、Model Name。
+
+### 修改内容
+
+- `ModelConfig` 改为 `source + ollama_model + api_base_url + api_key + api_model`。
+- 保留旧配置读取兼容, 旧的 `provider/use_ollama/base_url/model` 会自动归一成新结构。
+- `llm_provider.py` 新增 `ModelRouter` 和 `OllamaAdapter`。
+- PySide6 模型配置 UI 按来源切换字段: Ollama 模式只展示本地模型; API 模式才展示 Base URL、Model、API Key。
+
+### 思考精华
+
+- API Key 不是“模型配置”的通用字段, 它只属于 OpenAI-compatible API 模式。
+- Ollama 的 Base URL 可以作为内部调用细节, 但不应该暴露给用户作为必填配置。
+- UI 必须体现互斥关系, 否则用户会误以为两套配置能同时生效。
+
+## 2026-07-09 阶段 2: 真实模型生成链路
+
+### 目标
+
+让 Agent 不再只能依赖规则生成, 而是在用户启用模型时通过 ModelRouter 调用 Ollama 或 OpenAI-compatible 模型, 并把模型 JSON 输出解析为现有 `TestPoint` 和 `TestCase`。
+
+### 修改内容
+
+- `app/agent/model_generation.py`: 新增 `ModelGenerationService`, 构造测试 Agent Prompt, 调用模型路由, 解析 JSON。
+- `app/agent/workflow.py`: 支持可选模型生成节点 `generate_with_model`; 未启用模型时仍走规则 fallback。
+- `app/services/application_service.py`: `generate_test_points` 增加 `use_model` 参数, 根据当前 `ModelConfig` 创建 `ModelRouter`。
+- `app/desktop/main_window.py`: 操作区增加“使用模型生成”开关。
+- `tests/test_model_generation.py`: 覆盖模型 JSON 解析和坏 JSON 错误。
+- `tests/test_application_model_generation.py`: 覆盖 ApplicationService 真实模型生成分支。
+
+### 设计判断
+
+- 模型输出只接受 JSON, 不接受 Markdown 表格或解释文本, 这样后续 UI 和导出层不用猜格式。
+- 规则生成保留为 fallback, 便于用户无本地模型或无 API Key 时仍能启动和体验主流程。
+- `ModelGenerationService` 不知道具体模型来源, 只依赖 `ModelRouter.chat`, 保持 Ollama/API 解耦。
+- Workflow 的节点记录保留, 便于后续调试和展示 Agent 执行轨迹。
+
+### 验证
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compileall app
+```
+
+结果: 16 个测试通过, 编译检查通过。
+
+## 2026-07-09 阶段 2.1: 文档列表移除与 Ollama 模型来源确认
+
+### 问题确认
+
+- 文档上传列表只有选择入口, 没有移除入口。用户修改需求文档时无法把旧文件从当前任务列表中拿掉。
+- Ollama 模型列表已不是写死值。当前实现路径是 `MainWindow._refresh_ollama_models -> ApplicationService.list_ollama_models -> OllamaAdapter.list_models -> subprocess.run(["ollama", "list"])`。
+
+### 修改内容
+
+- `app/desktop/main_window.py`: 文档上传区新增“移除选中文档”按钮。
+- 移除操作只删除 UI 列表项, 不删除磁盘原始文件。
+- 开发文档记录 Ollama 模型列表来源, 便于后续排查本地模型展示问题。
+
+### 设计判断
+
+- “移除选中文档”是当前任务列表管理动作, 不是文件系统删除动作, 避免误删用户原始需求文档。
+- Ollama 模型列表依赖本机 `ollama` CLI; 如果本地未安装 Ollama 或命令失败, 当前实现返回空列表, UI 不崩溃。
+
+## 2026-07-09 阶段 3: UI 完整联动
+
+### 目标
+
+把已有服务层能力接到 Desktop UI, 让用户可以在界面上完成知识库导入、模型连接测试、格式化导出、编辑后同步和结果持久化。
+
+### 修改内容
+
+- `app/services/application_service.py`: 新增 `test_model_connection`、`export_cases`、`sync_cases_from_rows`、`rag_stats`。
+- `app/models/entities.py`: 新增 `ConnectionTestResult`。
+- `app/desktop/main_window.py`: 新增知识库导入按钮、RAG 文档列表、RAG 统计刷新、模型连接测试按钮、导出格式选择、表格编辑同步。
+- `tests/test_p3_application_ui_support.py`: 覆盖 P3 服务层契约。
+
+### 设计判断
+
+- UI 的表格编辑不直接改实体对象, 而是在导出前统一通过 `sync_cases_from_rows` 同步, 避免每次单元格变化都写业务逻辑。
+- 导出统一走 `ApplicationService.export_cases(format)`, UI 不直接知道 Markdown/Excel 细节。
+- 模型连接测试复用当前保存的 `ModelConfig`, 保证测试对象和后续生成对象一致。
+- RAG 侧栏先展示文档列表和索引统计, Top-K 和相似度阈值留给 P5 做真实检索增强。
+
+### 验证
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compileall app
+```
+
+结果: 20 个测试通过, 编译检查通过。
+
+## 2026-07-09 阶段 4: 测试点确认与用例模板
+
+### 目标
+
+让用户能在生成后确认或编辑测试点, 并用自定义字段顺序控制测试用例导出和模型输出约束。
+
+### 修改内容
+
+- `app/models/entities.py`: 新增 `CaseTemplate`。
+- `app/services/export_service.py`: Markdown / Excel 导出支持按模板字段和顺序输出。
+- `app/services/application_service.py`: 新增 `sync_points_from_rows` 和 `save_case_template`。
+- `app/agent/model_generation.py`: Prompt 增加当前用户用例模板字段顺序。
+- `app/desktop/main_window.py`: 功能测试点 Tab 改为可编辑表格; 操作区新增模板字段输入框。
+- `tests/test_p4_case_template.py`: 覆盖编辑测试点后生成用例、模板导出、Prompt 模板字段约束。
+
+### 设计判断
+
+- P4 首版使用逗号分隔字段列表配置模板, 不做多模板管理和拖拽排序。
+- 测试点表格编辑后, 在生成用例前统一同步回 `current_points`, 避免 UI 单元格事件直接写业务逻辑。
+- 导出字段顺序由 `CaseTemplate.fields` 决定, 默认字段保持 PRD 默认用例字段。
+- 模型 Prompt 使用同一份模板字段, 确保模型生成和导出层对字段约束一致。
+
+### 验证
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compileall app
+```
+
+结果: 23 个测试通过, 编译检查通过。
+
+## 2026-07-09 阶段 4.1: 模板字段中文化与 macOS 启动日志确认
+
+### 问题确认
+
+- 模板字段输入框显示 `case_id,module,function...`, 对用户来说是内部字段名, 不符合中文产品体验。
+- macOS 启动时出现 `IMKCFRunLoopWakeUpReliable` 和 `TSM AdjustCapsLockLEDForKeyTransitionHandling` 日志。
+
+### 修改内容
+
+- 用例模板输入统一改为中文字段: `用例编号,所属模块,功能点,前置条件,测试步骤,预期结果,优先级,类型,备注`。
+- 服务层支持中文字段映射到内部字段 key。
+- 模型 Prompt 中展示中文模板字段顺序。
+
+### 日志判断
+
+上述两条日志来自 macOS 输入法/键盘状态框架, 常见于 Python + Qt/PySide 桌面应用启动或输入控件聚焦时。
+
+当前判断:
+
+- 不影响业务功能。
+- 不影响模型调用、文档解析、RAG、导出。
+- 不建议通过重定向 stderr 在应用内消音, 这会掩盖真正的错误日志。
+
+## 2026-07-09 阶段 5: RAG 向量检索增强
+
+### 目标
+
+把关键词 RAG 升级为可选向量检索, 让 Top-K、相似度阈值和 Embedding 模型真实参与召回。
+
+### 实现方案
+
+- 支持本地 JSON 向量索引: `data/knowledge/vector_index.json`。
+- 支持 Windows 本地 Qdrant: 默认 `http://localhost:6333`, Collection `test_agent_desktop`。
+- Embedding 默认走 Ollama: `http://localhost:11434/api/embeddings`。
+- 如果未启用向量检索, 或 embedding 不可用, 仍保留关键词 fallback。
+
+### 本地准备
+
+如果要体验向量检索:
+
+```bash
+ollama pull nomic-embed-text
+ollama serve
+```
+
+然后在 UI 中:
+
+- 向量库可选择 `本地 JSON` 或 `Qdrant`。
+- 使用 Qdrant 时, Windows 推荐 Docker 启动: `docker run -p 6333:6333 -p 6334:6334 -v %cd%/qdrant_storage:/qdrant/storage qdrant/qdrant`。
+- 勾选“启用向量检索”。
+- Embedding 模型填写 `nomic-embed-text`。
+- Top-K 例如 `5`。
+- 相似度阈值例如 `0.30`。
+
+### 修改内容
+
+- `app/rag/embeddings.py`: 新增 `EmbeddingAdapter` 和 `OllamaEmbeddingAdapter`。
+- `app/rag/vector_index.py`: 新增本地 JSON 向量索引。
+- `app/rag/qdrant_index.py`: 新增 Qdrant REST 向量索引。
+- `app/rag/engine.py`: 支持向量索引写入、向量召回、Top-K、相似度阈值。
+- `app/services/application_service.py`: 新增 `configure_rag`。
+- `app/desktop/main_window.py`: RAG 侧栏新增向量库选择、启用向量检索、Top-K、相似度阈值、Embedding 模型、Qdrant URL 和 Collection 输入。
+- `tests/test_p5_vector_rag.py`: 覆盖向量召回、阈值过滤、服务层参数配置。
+- `tests/test_p5_qdrant_vector_index.py`: 覆盖 Qdrant Collection 创建、Upsert、Search。
+
+### 设计判断
+
+- P5 支持本地 JSON 和 Qdrant 两种模式, 既能零依赖体验, 也能贴近 Windows 本地向量数据库部署。
+- `RagEngine` 只依赖 `EmbeddingAdapter` 和向量索引接口, 后续替换 FAISS/Chroma 或扩展 Qdrant payload 不需要改 UI 和 Agent。
+- 单元测试使用 FakeEmbeddingAdapter, 不依赖本地 Ollama, 保证测试稳定。
+
+### 验证
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compileall app
+```
+
+结果: 28 个测试通过, 编译检查通过。
+
+### 暂不进入
+
+- 企业账号、多人协作、权限系统。
+- 自动执行测试。
+- 插件市场。
+- FAISS/Chroma 后续作为 `RagEngine` 的可选替换实现接入。
