@@ -9,7 +9,7 @@
 当前支持两种本地向量库模式:
 
 1. 本地 JSON 向量索引: 不需要安装向量数据库。
-2. Qdrant 本地向量数据库: Windows 推荐用 Docker 启动本地 Qdrant 服务。
+2. Qdrant 本地向量数据库: Windows 直接运行本地 Qdrant 可执行文件或注册为本地服务。
 
 选择建议:
 
@@ -18,11 +18,15 @@
 
 ## Windows 本地 Qdrant 准备
 
-推荐 Docker:
+无需容器环境。推荐直接下载 Windows 版 Qdrant 可执行文件:
 
-```bash
-docker run -p 6333:6333 -p 6334:6334 -v %cd%/qdrant_storage:/qdrant/storage qdrant/qdrant
+```powershell
+mkdir C:\qdrant
+cd C:\qdrant
+.\qdrant.exe
 ```
+
+默认 REST 地址为 `http://localhost:6333`。如果需要固定数据目录, 在 Qdrant 配置文件中设置 storage 路径, 或把 `qdrant.exe` 放在固定目录下运行。
 
 Desktop 中配置:
 

@@ -20,6 +20,7 @@
 - UI 完整联动: 知识库导入、RAG 统计刷新、模型连接测试、Markdown/Excel 导出选择。
 - 测试点确认与用例模板: 结构化测试点表格、模板字段导出、模型 Prompt 字段约束。
 - RAG 增强: Ollama embedding、本地 JSON 向量索引、Qdrant、Top-K 和相似度阈值。
+- Windows Qdrant: 直接运行本地 `qdrant.exe`, 默认连接 `http://localhost:6333`。
 
 ## 开发文档
 

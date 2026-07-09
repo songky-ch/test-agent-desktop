@@ -239,7 +239,7 @@ ollama serve
 然后在 UI 中:
 
 - 向量库可选择 `本地 JSON` 或 `Qdrant`。
-- 使用 Qdrant 时, Windows 推荐 Docker 启动: `docker run -p 6333:6333 -p 6334:6334 -v %cd%/qdrant_storage:/qdrant/storage qdrant/qdrant`。
+- 使用 Qdrant 时, Windows 直接运行本地 `qdrant.exe`, 默认 REST 地址为 `http://localhost:6333`。
 - 勾选“启用向量检索”。
 - Embedding 模型填写 `nomic-embed-text`。
 - Top-K 例如 `5`。
