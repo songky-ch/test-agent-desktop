@@ -31,10 +31,13 @@ class OllamaEmbeddingTest(unittest.TestCase):
         self.assertTrue(client.urls[1].endswith("/api/embeddings"))
 
     def test_embedding_adapter_reports_install_command(self):
-        adapter = OllamaEmbeddingAdapter("nomic-embed-text", FailingEmbeddingHttpClient())
+        client = FailingEmbeddingHttpClient()
+        adapter = OllamaEmbeddingAdapter(" nomic-embed-text ", client)
 
         with self.assertRaisesRegex(RuntimeError, "ollama pull nomic-embed-text"):
             adapter.embed("手机号注册")
+
+        self.assertEqual(adapter.model, "nomic-embed-text")
 
 
 if __name__ == "__main__":

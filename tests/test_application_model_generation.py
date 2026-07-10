@@ -9,9 +9,11 @@ from app.services.application_service import ApplicationService
 class FakeHttpClient:
     def __init__(self):
         self.payload = None
+        self.payloads = []
 
     def post_json(self, url, headers, payload):
         self.payload = payload
+        self.payloads.append(payload)
         return {
             "choices": [
                 {
@@ -75,8 +77,9 @@ class ApplicationModelGenerationTest(unittest.TestCase):
 
             self.assertEqual(points[0].module, "模型模块")
             self.assertEqual(cases[0].case_id, "TC-777")
-            self.assertEqual(service.executed_nodes, ["retrieve_context", "generate_with_model"])
-            self.assertIn("手机号必填", client.payload["messages"][1]["content"])
+            self.assertEqual(service.executed_nodes, ["retrieve_context", "generate_test_points_with_model"])
+            self.assertIn("手机号必填", client.payloads[0]["messages"][1]["content"])
+            self.assertIn("模型功能", client.payloads[1]["messages"][1]["content"])
 
     def test_supplemental_input_is_sent_to_model_prompt(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -61,6 +61,23 @@ class LlmProviderTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "embedding 模型"):
             provider.chat([LlmMessage(role="user", content="ping")])
 
+    def test_ollama_provider_does_not_retry_timed_out_chat(self):
+        class TimedOutHttpClient:
+            def __init__(self):
+                self.urls = []
+
+            def post_json(self, url, headers, payload):
+                self.urls.append(url)
+                raise RuntimeError("模型请求超时 (300 秒)")
+
+        client = TimedOutHttpClient()
+        provider = OllamaAdapter(ModelConfig(source="ollama", ollama_model="local-model"), client)
+
+        with self.assertRaisesRegex(RuntimeError, "300 秒"):
+            provider.chat([LlmMessage(role="user", content="ping")])
+
+        self.assertEqual(len(client.urls), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

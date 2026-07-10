@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
 
@@ -10,12 +10,6 @@ from app.services.export_service import DEFAULT_CASE_TEMPLATE, case_template_lab
 
 class ModelGenerationError(RuntimeError):
     pass
-
-
-@dataclass(frozen=True)
-class ModelGenerationResult:
-    test_points: list[TestPoint]
-    test_cases: list[TestCase]
 
 
 class ModelGenerationService:
@@ -29,24 +23,31 @@ class ModelGenerationService:
         self.case_template = case_template
         self.prompt_path = prompt_path or Path(__file__).parents[2] / "prompts" / "model_generation.md"
 
-    def generate(self, context: RequirementContext) -> ModelGenerationResult:
-        content = self.router.chat(self._messages(context))
-        payload = self._parse_json(content)
-        return ModelGenerationResult(
-            test_points=[self._parse_point(item) for item in payload.get("test_points", [])],
-            test_cases=[self._parse_case(item) for item in payload.get("test_cases", [])],
-        )
-
-    def _messages(self, context: RequirementContext) -> list[LlmMessage]:
-        prompt = self._load_prompt()
-        user = (
+    def generate_test_points(self, context: RequirementContext) -> list[TestPoint]:
+        user_content = (
             f"需求文档:\n{context.markdown}\n\n"
             f"补充需求:\n{context.supplemental}\n\n"
             f"RAG 上下文:\n{chr(10).join(context.rag_context)}"
         )
+        content = self.router.chat(self._messages(user_content, "仅生成 test_points 数组, 不要生成 test_cases。"))
+        payload = self._parse_json(content)
+        return [self._parse_point(item) for item in payload.get("test_points", [])]
+
+    def generate_test_cases(self, points: list[TestPoint]) -> list[TestCase]:
+        user_content = "已确认测试点:\n" + json.dumps(
+            [asdict(point) for point in points],
+            ensure_ascii=False,
+            indent=2,
+        )
+        content = self.router.chat(self._messages(user_content, "仅生成 test_cases 数组, 不要生成 test_points。"))
+        payload = self._parse_json(content)
+        return [self._parse_case(item) for item in payload.get("test_cases", [])]
+
+    def _messages(self, user_content: str, instruction: str) -> list[LlmMessage]:
+        prompt = self._load_prompt().replace("{{generation_instruction}}", instruction)
         return [
             LlmMessage(role="system", content=prompt),
-            LlmMessage(role="user", content=user),
+            LlmMessage(role="user", content=user_content),
         ]
 
     def _load_prompt(self) -> str:
@@ -55,9 +56,9 @@ class ModelGenerationService:
             template = self.prompt_path.read_text(encoding="utf-8")
             return template.replace("{{case_template_fields}}", template_fields)
         return (
-            "你是测试人员专属 AI Agent。请基于需求文档、补充需求和 RAG 上下文生成测试点和测试用例。\n"
+            "你是测试人员专属 AI Agent。请基于用户提供的内容生成测试结果。\n"
+            "{{generation_instruction}}\n"
             "只输出 JSON, 不要输出 Markdown, 不要解释。\n"
-            "JSON 结构必须包含 test_points 和 test_cases 两个数组。\n"
             "test_points 字段: module, function, positive_scenarios, negative_scenarios, "
             "boundary_scenarios, exception_scenarios, data_checks, permission_checks, compatibility_notes。\n"
             "test_cases 字段: case_id, module, function, precondition, steps, expected_results, "

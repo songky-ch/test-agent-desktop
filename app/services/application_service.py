@@ -33,6 +33,7 @@ class ApplicationService:
         self.current_cases: list[TestCase] = []
         self.case_template = DEFAULT_CASE_TEMPLATE
         self.executed_nodes: list[str] = []
+        self.current_points_use_model = False
 
     def load_model_config(self) -> ModelConfig:
         return self.config.load_model_config()
@@ -133,11 +134,17 @@ class ApplicationService:
         self.current_points = state.test_points
         self.current_cases = state.test_cases
         self.executed_nodes = state.executed_nodes
+        self.current_points_use_model = use_model
         return self.current_points
 
     def generate_test_cases(self) -> list[TestCase]:
         if not self.current_cases:
-            self.current_cases = self.agent.generate_test_cases(self.current_points)
+            if self.current_points_use_model:
+                config = self.load_model_config()
+                generation = ModelGenerationService(ModelRouter(config, self.http_client), self.case_template)
+                self.current_cases = generation.generate_test_cases(self.current_points)
+            else:
+                self.current_cases = self.agent.generate_test_cases(self.current_points)
         return self.current_cases
 
     def export_markdown(self) -> Path:

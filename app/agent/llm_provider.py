@@ -20,17 +20,22 @@ class HttpClient(Protocol):
 
 
 class UrlLibHttpClient:
+    def __init__(self, timeout_seconds: int = 300):
+        self.timeout_seconds = timeout_seconds
+
     def post_json(self, url: str, headers: dict[str, str], payload: dict):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req = request.Request(url, data=body, headers=headers, method="POST")
         try:
-            with request.urlopen(req, timeout=60) as response:
+            with request.urlopen(req, timeout=self.timeout_seconds) as response:
                 return json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"HTTP {exc.code}: {detail}") from exc
         except URLError as exc:
             raise RuntimeError(f"网络连接失败: {exc.reason}") from exc
+        except TimeoutError as exc:
+            raise RuntimeError(f"模型请求超时 ({self.timeout_seconds} 秒), 请确认 Ollama 模型能够在本机正常运行") from exc
 
 
 class OpenAiCompatibleProvider:
@@ -88,6 +93,9 @@ class OllamaAdapter:
             "model": self.config.ollama_model,
             "messages": [{"role": message.role, "content": message.content} for message in messages],
             "stream": False,
+            "format": "json",
+            "keep_alive": "10m",
+            "options": {"temperature": 0.2},
         }
         try:
             response = self.http_client.post_json(
@@ -96,7 +104,9 @@ class OllamaAdapter:
                 payload,
             )
             return response["message"]["content"]
-        except Exception:
+        except Exception as exc:
+            if "超时" in str(exc).lower() or "timed out" in str(exc).lower():
+                raise
             return self._generate(messages)
 
     def _generate(self, messages: list[LlmMessage]) -> str:
@@ -108,6 +118,9 @@ class OllamaAdapter:
                 "model": self.config.ollama_model,
                 "prompt": prompt,
                 "stream": False,
+                "format": "json",
+                "keep_alive": "10m",
+                "options": {"temperature": 0.2},
             },
         )
         return response["response"]

@@ -35,10 +35,8 @@ class AgentWorkflow:
         return self._generate_test_cases(state)
 
     def _generate_with_model(self, state: WorkflowState) -> WorkflowState:
-        result = self.model_generation.generate(state.requirement)
-        state.test_points = result.test_points
-        state.test_cases = result.test_cases
-        state.executed_nodes.append("generate_with_model")
+        state.test_points = self.model_generation.generate_test_points(state.requirement)
+        state.executed_nodes.append("generate_test_points_with_model")
         return state
 
     def _retrieve_context(self, state: WorkflowState) -> WorkflowState:

@@ -15,7 +15,7 @@ class FakeRouter:
 
 
 class ModelGenerationTest(unittest.TestCase):
-    def test_model_generation_parses_points_and_cases(self):
+    def test_model_generation_parses_points_and_cases_separately(self):
         router = FakeRouter(
             """
             {
@@ -50,23 +50,24 @@ class ModelGenerationTest(unittest.TestCase):
         )
         service = ModelGenerationService(router)
 
-        result = service.generate(
+        points = service.generate_test_points(
             RequirementContext(
                 markdown="# 用户管理\n用户注册",
                 supplemental="兼容 Chrome",
                 rag_context=["重复手机号不可注册"],
             )
         )
+        cases = service.generate_test_cases(points)
 
-        self.assertEqual(result.test_points[0].module, "用户管理")
-        self.assertEqual(result.test_cases[0].case_id, "TC-001")
+        self.assertEqual(points[0].module, "用户管理")
+        self.assertEqual(cases[0].case_id, "TC-001")
         self.assertIn("只输出 JSON", router.messages[0].content)
 
     def test_model_generation_raises_clear_error_for_invalid_json(self):
         service = ModelGenerationService(FakeRouter("不是 JSON"))
 
         with self.assertRaisesRegex(ModelGenerationError, "模型输出不是合法 JSON"):
-            service.generate(RequirementContext(markdown="# 用户管理\n用户注册"))
+            service.generate_test_points(RequirementContext(markdown="# 用户管理\n用户注册"))
 
 
 if __name__ == "__main__":

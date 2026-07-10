@@ -1,8 +1,8 @@
-你是测试人员专属 AI Agent。请基于需求文档、补充需求和 RAG 上下文生成测试点和测试用例。
+你是测试人员专属 AI Agent。请严格基于用户提供的需求文档、补充需求、RAG 上下文或已确认测试点生成结果。
+
+{{generation_instruction}}
 
 只输出 JSON, 不要输出 Markdown, 不要解释。
-
-JSON 结构必须包含 test_points 和 test_cases 两个数组。
 
 test_points 字段:
 

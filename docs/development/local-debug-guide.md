@@ -105,7 +105,23 @@ ollama serve
 ollama pull nomic-embed-text
 ```
 
+如果 `ollama list` 已经能看到模型但应用仍调用失败, 在 PowerShell 依次验证应用实际使用的 Ollama 服务和 Embedding 接口:
+
+```powershell
+ollama show nomic-embed-text
+Invoke-RestMethod -Uri http://localhost:11434/api/tags
+Invoke-RestMethod -Uri http://localhost:11434/api/embed -Method Post -ContentType "application/json" -Body '{"model":"nomic-embed-text","input":"ping"}'
+```
+
+第三条命令必须返回 `embeddings` 数组。若命令行可用但应用报错, 核对界面的 Embedding 模型输入框是否有多余空格, 并确认应用与命令行运行在同一个 Windows 用户下。
+
 如果拆解测试点时报 404, 先确认模型配置中选择的是对话模型, 不是 embedding 模型。
+
+Ollama 本地生成请求超时为 300 秒。“拆解测试点”只生成测试点; 确认或编辑测试点后, “生成测试用例”会再次调用当前 Ollama/API 模型生成用例。Windows 首次加载模型较慢时, 可以先执行一次:
+
+```powershell
+ollama run qwen2.5:7b "ping"
+```
 
 ## 7. PyInstaller 打包
 

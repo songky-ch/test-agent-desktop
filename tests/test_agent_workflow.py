@@ -1,9 +1,8 @@
 import unittest
 
 from app.agent.workflow import AgentWorkflow, WorkflowState
-from app.agent.model_generation import ModelGenerationResult
 from app.models.entities import RequirementContext
-from app.models.entities import TestCase, TestPoint
+from app.models.entities import TestPoint
 
 
 class AgentWorkflowTest(unittest.TestCase):
@@ -28,22 +27,8 @@ class AgentWorkflowTest(unittest.TestCase):
 
     def test_workflow_uses_model_generation_when_available(self):
         class FakeModelGeneration:
-            def generate(self, requirement):
-                return ModelGenerationResult(
-                    test_points=[TestPoint(module="模型模块", function="模型功能")],
-                    test_cases=[
-                        TestCase(
-                            case_id="TC-900",
-                            module="模型模块",
-                            function="模型功能",
-                            precondition="前置",
-                            steps=["步骤"],
-                            expected_results=["结果"],
-                            priority="P0",
-                            case_type="正向",
-                        )
-                    ],
-                )
+            def generate_test_points(self, requirement):
+                return [TestPoint(module="模型模块", function="模型功能")]
 
         workflow = AgentWorkflow(
             retrieve_context=lambda query: [],
@@ -52,9 +37,9 @@ class AgentWorkflowTest(unittest.TestCase):
 
         result = workflow.run(WorkflowState(requirement=RequirementContext(markdown="# 需求"), use_rag=False))
 
-        self.assertEqual(result.executed_nodes, ["generate_with_model"])
+        self.assertEqual(result.executed_nodes, ["generate_test_points_with_model"])
         self.assertEqual(result.test_points[0].module, "模型模块")
-        self.assertEqual(result.test_cases[0].case_id, "TC-900")
+        self.assertEqual(result.test_cases, [])
 
 
 if __name__ == "__main__":

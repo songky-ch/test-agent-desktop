@@ -74,7 +74,7 @@ class P4CaseTemplateTest(unittest.TestCase):
             CaseTemplate(fields=["case_id", "module", "function", "priority"]),
         )
 
-        service.generate(RequirementContext(markdown="# 用户管理\n用户注册"))
+        service.generate_test_points(RequirementContext(markdown="# 用户管理\n用户注册"))
 
         self.assertIn("用例编号, 所属模块, 功能点, 优先级", router.messages[0].content)
 

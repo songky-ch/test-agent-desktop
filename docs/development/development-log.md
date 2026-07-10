@@ -445,3 +445,24 @@ PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compilea
 ```
 
 结果: 41 个测试通过, 编译检查通过。
+
+## 2026-07-10 阶段 8.3: Ollama RAG 与本地生成稳定性修复
+
+### 问题确认
+
+- Embedding 新版接口错误被旧版接口回退覆盖, Windows 端只能看到最终 404, 无法确认真实失败原因。
+- Ollama 请求固定 60 秒超时, 本地 CPU 首次加载或生成较多内容时容易超时。
+- 拆解测试点时一次生成测试点和完整测试用例, 不符合“测试点确认后再生成用例”的 PRD 顺序, 也增加单次生成耗时。
+
+### 修改内容
+
+- Embedding 模型名在调用前去除首尾空格。
+- `/api/embed` 仅在接口 404 时回退 `/api/embeddings`; 模型不存在、连接失败和超时保留原始错误。
+- Embedding 错误提示包含实际模型名、新旧接口错误和 `ollama show` 本地验证命令。
+- Ollama HTTP 超时调整为 300 秒, 超时后不再重复调用 `/api/generate`。
+- Ollama 生成启用 JSON 格式、低温度和 10 分钟模型保活。
+- 模型生成拆为两个阶段: 拆解时只生成测试点; 用户确认或编辑后, 再由同一模型生成测试用例。
+
+### 本地验证要求
+
+Windows PowerShell 先验证 `ollama show nomic-embed-text` 和 `/api/embed` 能返回向量。对话模型首次使用前可执行一次 `ollama run <对话模型> "ping"` 完成模型加载。
