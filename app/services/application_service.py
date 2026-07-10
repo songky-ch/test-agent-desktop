@@ -59,8 +59,20 @@ class ApplicationService:
         markdown = self.documents.convert_to_markdown(source_path)
         return self.rag.import_markdown(markdown.markdown_path)
 
+    def remove_knowledge_document(self, document: str):
+        return self.rag.remove_document(Path(document).name)
+
     def rag_stats(self):
         return self.rag.stats()
+
+    def test_rag_connection(self) -> ConnectionTestResult:
+        try:
+            self.rag.test_vector_backend()
+            if self.rag.use_vector and self.rag.embedding_adapter:
+                self.rag.embedding_adapter.embed("ping")
+        except Exception as exc:
+            return ConnectionTestResult(False, f"RAG 连接失败: {exc}")
+        return ConnectionTestResult(True, "RAG 连接成功")
 
     def configure_rag(
         self,
@@ -108,6 +120,8 @@ class ApplicationService:
         use_rag: bool = True,
         use_model: bool = False,
     ) -> list[TestPoint]:
+        if self.current_markdown is None:
+            raise RuntimeError("请先选择需求文档并转换 Markdown")
         markdown = self.current_markdown.content if self.current_markdown else ""
         workflow = self._workflow(use_model)
         state = workflow.run(

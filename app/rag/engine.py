@@ -65,6 +65,17 @@ class RagEngine:
             vector_index_path=self._vector_index_path(),
         )
 
+    def remove_document(self, document: str) -> RagIndexStats:
+        documents = self._load_index()
+        documents.pop(Path(document).name, None)
+        target = self.knowledge_dir / Path(document).name
+        if target.exists():
+            target.unlink()
+        self._save_index(documents)
+        if hasattr(self.vector_index, "remove_document"):
+            self.vector_index.remove_document(Path(document).name)
+        return self.stats()
+
     def retrieve(self, query: str, top_k: Optional[int] = None) -> list[str]:
         if not self.enabled or not self.knowledge_dir.exists():
             return []
@@ -100,6 +111,10 @@ class RagEngine:
             vector_count=self.vector_index.count(),
             vector_index_path=self._vector_index_path(),
         )
+
+    def test_vector_backend(self) -> None:
+        if self.vector_backend == "qdrant" and hasattr(self.vector_index, "ping"):
+            self.vector_index.ping()
 
     def _chunk(self, content: str, chunk_size: int = 700) -> list[str]:
         paragraphs = [part.strip() for part in content.split("\n\n") if part.strip() and not part.strip().startswith("#")]

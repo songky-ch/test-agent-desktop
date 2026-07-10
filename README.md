@@ -31,6 +31,7 @@
 - [架构开发路线](docs/development/architecture-roadmap.md)
 - [本地启动与调试手册](docs/development/local-debug-guide.md)
 - [P7 最终差距自检](docs/development/final-gap-check.md)
+- [Skill 扩展说明](docs/development/skill-extension-guide.md)
 
 ## 本地启动
 
@@ -48,7 +49,7 @@ python3 -m unittest discover -s tests
 python3 -m compileall app
 ```
 
-当前测试数: 31。
+当前测试数: 37。
 
 ## P8 可选依赖
 

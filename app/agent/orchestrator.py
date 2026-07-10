@@ -3,25 +3,28 @@ from app.models.entities import RequirementContext, TestCase, TestPoint
 
 class AgentOrchestrator:
     def generate_test_points(self, context: RequirementContext) -> list[TestPoint]:
+        lines = self._body_lines(context.markdown)
         module = self._first_heading(context.markdown)
-        function = self._first_body_line(context.markdown)
-        negative = self._matching_lines(context.markdown, ["错误", "失败", "异常", "不允许"])
-        compatibility = self._matching_lines(context.supplemental, ["兼容", "Chrome", "Edge", "Firefox"])
-        data_checks = self._matching_lines("\n".join(context.rag_context), ["缺陷", "校验", "重复", "必填"])
+        functions = lines[:8] or [self._first_body_line(context.markdown)]
+        source_text = context.markdown + "\n" + context.supplemental
+        data_checks = self._matching_lines("\n".join(context.rag_context) + "\n" + source_text, ["缺陷", "校验", "重复", "必填"])
 
-        return [
-            TestPoint(
-                module=module,
-                function=function,
-                positive_scenarios=[f"验证{function}主流程可完成"],
-                negative_scenarios=negative,
-                boundary_scenarios=self._matching_lines(context.markdown + "\n" + context.supplemental, ["边界", "小于", "大于", "最大", "最小"]),
-                exception_scenarios=self._matching_lines(context.markdown + "\n" + context.supplemental, ["异常", "超时", "失败"]),
-                data_checks=data_checks,
-                permission_checks=self._matching_lines(context.markdown + "\n" + context.supplemental, ["权限", "角色", "未登录"]),
-                compatibility_notes=compatibility,
+        points = []
+        for function in functions:
+            points.append(
+                TestPoint(
+                    module=module,
+                    function=function,
+                    positive_scenarios=[f"验证{function}主流程可按当前需求完成"],
+                    negative_scenarios=self._matching_lines(function + "\n" + source_text, ["错误", "失败", "异常", "不允许", "禁止"]),
+                    boundary_scenarios=self._matching_lines(function + "\n" + source_text, ["边界", "小于", "大于", "最大", "最小", "为空"]),
+                    exception_scenarios=self._matching_lines(function + "\n" + source_text, ["异常", "超时", "失败"]),
+                    data_checks=data_checks,
+                    permission_checks=self._matching_lines(function + "\n" + source_text, ["权限", "角色", "未登录"]),
+                    compatibility_notes=self._matching_lines(context.supplemental, ["兼容", "Chrome", "Edge", "Firefox", "移动端"]),
+                )
             )
-        ]
+        return points
 
     def generate_test_cases(self, points: list[TestPoint]) -> list[TestCase]:
         cases = []
@@ -42,11 +45,14 @@ class AgentOrchestrator:
         return cases
 
     def _first_heading(self, markdown: str) -> str:
+        headings = []
         for line in markdown.splitlines():
             stripped = line.strip()
             if stripped.startswith("#"):
-                return stripped.lstrip("#").strip()
-        return "默认模块"
+                headings.append(stripped.lstrip("#").strip())
+        if len(headings) > 1:
+            return headings[1]
+        return headings[0] if headings else "默认模块"
 
     def _first_body_line(self, markdown: str) -> str:
         for line in markdown.splitlines():
@@ -54,6 +60,15 @@ class AgentOrchestrator:
             if stripped and not stripped.startswith("#"):
                 return stripped
         return "需求功能"
+
+    def _body_lines(self, markdown: str) -> list[str]:
+        lines = []
+        for raw_line in markdown.splitlines():
+            stripped = raw_line.strip().strip("-").strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            lines.append(stripped)
+        return lines
 
     def _matching_lines(self, text: str, keywords: list[str]) -> list[str]:
         matches = []

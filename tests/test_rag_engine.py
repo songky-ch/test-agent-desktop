@@ -21,6 +21,20 @@ class RagEngineTest(unittest.TestCase):
             self.assertIn("重复手机号注册应阻止", matches[0])
             self.assertTrue((root / "knowledge" / "index.json").exists())
 
+    def test_remove_document_updates_keyword_index(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "history.md"
+            source.write_text("# 历史缺陷\n重复手机号注册应阻止", encoding="utf-8")
+            engine = RagEngine(root / "knowledge")
+
+            engine.import_markdown(source)
+            stats = engine.remove_document("history.md")
+            matches = engine.retrieve("手机号 注册", top_k=1)
+
+            self.assertEqual(stats.document_count, 0)
+            self.assertEqual(matches, [])
+
 
 if __name__ == "__main__":
     unittest.main()

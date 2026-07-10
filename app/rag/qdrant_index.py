@@ -65,6 +65,20 @@ class QdrantVectorIndex:
             {"points": points},
         )
 
+    def remove_document(self, document: str) -> None:
+        self.http_client.request_json(
+            "POST",
+            f"{self._collection_url()}/points/delete",
+            {
+                "filter": {
+                    "must": [
+                        {"key": "project_id", "match": {"value": self.project_id}},
+                        {"key": "document", "match": {"value": document}},
+                    ]
+                }
+            },
+        )
+
     def search(self, query_embedding: list[float], top_k: int, threshold: float) -> list[str]:
         response = self.http_client.request_json(
             "POST",
@@ -83,9 +97,15 @@ class QdrantVectorIndex:
         response = self.http_client.request_json(
             "POST",
             f"{self._collection_url()}/points/count",
-            {"exact": True},
+            {
+                "exact": True,
+                "filter": {"must": [{"key": "project_id", "match": {"value": self.project_id}}]},
+            },
         )
         return int(response.get("result", {}).get("count", 0))
+
+    def ping(self) -> None:
+        self.http_client.request_json("GET", f"{self.base_url}/collections")
 
     def _ensure_collection(self, vector_size: int) -> None:
         self.http_client.request_json(

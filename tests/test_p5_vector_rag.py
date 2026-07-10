@@ -40,6 +40,22 @@ class P5VectorRagTest(unittest.TestCase):
             self.assertIn("重复手机号注册应阻止", matches[0])
             self.assertTrue((root / "knowledge" / "vector_index.json").exists())
 
+    def test_remove_document_updates_local_vector_index(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "knowledge.md"
+            source.write_text("# 知识库\n\n重复手机号注册应阻止", encoding="utf-8")
+            engine = RagEngine(
+                root / "knowledge",
+                embedding_adapter=FakeEmbeddingAdapter(),
+                use_vector=True,
+            )
+
+            engine.import_markdown(source)
+            stats = engine.remove_document("knowledge.md")
+
+            self.assertEqual(stats.vector_count, 0)
+
     def test_vector_threshold_filters_low_similarity_chunks(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

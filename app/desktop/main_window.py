@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         self.qdrant_url = QLineEdit("http://localhost:6333")
         self.qdrant_collection = QLineEdit("test_agent_desktop")
         self.model_generation_enabled = QCheckBox("使用模型生成")
+        self.model_generation_enabled.setChecked(True)
         self.status_label = QLabel("模型状态: 未测试")
         self.rag_documents = QListWidget()
         self.rag_stats_label = QLabel("知识库统计\n文档数量: 0\n分块数量: 0\n索引路径: -")
@@ -207,9 +208,14 @@ class MainWindow(QMainWindow):
         panel.setFrameShape(QFrame.StyledPanel)
         layout = QVBoxLayout(panel)
         import_doc = QPushButton("添加文档")
+        remove_doc = QPushButton("移除选中文档")
+        test_rag = QPushButton("测试 RAG")
         import_doc.clicked.connect(self._import_knowledge_document)
+        remove_doc.clicked.connect(self._remove_knowledge_document)
+        test_rag.clicked.connect(self._test_rag_connection)
         layout.addWidget(QLabel("RAG 知识库"))
         layout.addWidget(import_doc)
+        layout.addWidget(remove_doc)
         layout.addWidget(self.rag_documents)
         layout.addWidget(self.rag_enabled)
         layout.addWidget(self.vector_rag_enabled)
@@ -225,6 +231,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.qdrant_url)
         layout.addWidget(QLabel("Qdrant Collection"))
         layout.addWidget(self.qdrant_collection)
+        layout.addWidget(test_rag)
         layout.addStretch()
         layout.addWidget(self.rag_stats_label)
         return panel
@@ -337,9 +344,25 @@ class MainWindow(QMainWindow):
         if not path:
             return
         self._apply_rag_settings()
-        self.service.import_knowledge_document(Path(path))
+        stats = self.service.import_knowledge_document(Path(path))
         self.rag_documents.addItem(path)
         self._refresh_rag_stats()
+        self._info(f"知识库已导入, 分块数量: {stats.chunk_count}, 向量数量: {stats.vector_count}")
+
+    def _remove_knowledge_document(self) -> None:
+        item = self.rag_documents.currentItem()
+        if item is None:
+            self._info("请先选择要移除的知识库文档")
+            return
+        stats = self.service.remove_knowledge_document(Path(item.text()).name)
+        self.rag_documents.takeItem(self.rag_documents.currentRow())
+        self._refresh_rag_stats()
+        self._info(f"知识库文档已移除, 当前文档数量: {stats.document_count}")
+
+    def _test_rag_connection(self) -> None:
+        self._apply_rag_settings()
+        result = self.service.test_rag_connection()
+        self._info(result.message)
 
     def _refresh_rag_stats(self) -> None:
         stats = self.service.rag_stats()
@@ -347,17 +370,24 @@ class MainWindow(QMainWindow):
             "知识库统计\n"
             f"文档数量: {stats.document_count}\n"
             f"分块数量: {stats.chunk_count}\n"
+            f"向量数量: {stats.vector_count}\n"
             f"索引路径: {stats.index_path}"
         )
 
     def _generate_points(self) -> None:
+        if self.model_generation_enabled.isChecked():
+            self._save_config()
         self._save_case_template()
         self._apply_rag_settings()
-        points = self.service.generate_test_points(
-            self.supplemental_input.toPlainText(),
-            self.rag_enabled.isChecked(),
-            self.model_generation_enabled.isChecked(),
-        )
+        try:
+            points = self.service.generate_test_points(
+                self.supplemental_input.toPlainText(),
+                self.rag_enabled.isChecked(),
+                self.model_generation_enabled.isChecked(),
+            )
+        except Exception as exc:
+            self._info(str(exc))
+            return
         self.points_table.setRowCount(len(points))
         for row, point in enumerate(points):
             values = [
@@ -375,6 +405,10 @@ class MainWindow(QMainWindow):
                 self.points_table.setItem(row, column, QTableWidgetItem(value))
 
     def _generate_cases(self) -> None:
+        if not self.service.current_points:
+            self._generate_points()
+            if not self.service.current_points:
+                return
         self._save_case_template()
         self._sync_points_from_table()
         cases = self.service.generate_test_cases()

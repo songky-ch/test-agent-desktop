@@ -7,7 +7,11 @@ from app.services.application_service import ApplicationService
 
 
 class FakeHttpClient:
+    def __init__(self):
+        self.payload = None
+
     def post_json(self, url, headers, payload):
+        self.payload = payload
         return {
             "choices": [
                 {
@@ -54,7 +58,8 @@ class ApplicationModelGenerationTest(unittest.TestCase):
             root = Path(temp_dir)
             req = root / "req.txt"
             req.write_text("用户注册\n手机号必填", encoding="utf-8")
-            service = ApplicationService(root, http_client=FakeHttpClient())
+            client = FakeHttpClient()
+            service = ApplicationService(root, http_client=client)
             service.save_model_config(
                 ModelConfig(
                     source="openai_compatible",
@@ -71,6 +76,29 @@ class ApplicationModelGenerationTest(unittest.TestCase):
             self.assertEqual(points[0].module, "模型模块")
             self.assertEqual(cases[0].case_id, "TC-777")
             self.assertEqual(service.executed_nodes, ["retrieve_context", "generate_with_model"])
+            self.assertIn("手机号必填", client.payload["messages"][1]["content"])
+
+    def test_supplemental_input_is_sent_to_model_prompt(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            req = root / "req.txt"
+            req.write_text("课程报名", encoding="utf-8")
+            client = FakeHttpClient()
+            service = ApplicationService(root, http_client=client)
+            service.save_model_config(
+                ModelConfig(
+                    source="openai_compatible",
+                    api_base_url="https://api.example.com/v1",
+                    api_key="sk-test",
+                    api_model="test-model",
+                )
+            )
+
+            service.convert_document(req)
+            service.generate_test_points("补充: 重点覆盖重复报名和支付超时", use_model=True)
+
+            self.assertIn("重复报名", client.payload["messages"][1]["content"])
+            self.assertIn("支付超时", client.payload["messages"][1]["content"])
 
 
 if __name__ == "__main__":

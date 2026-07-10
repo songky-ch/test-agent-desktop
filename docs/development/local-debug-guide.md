@@ -47,6 +47,8 @@ PyCharm 中可以创建 Python 运行配置:
 7. 点击生成测试用例。
 8. 导出 Markdown 或 Excel。
 
+默认会勾选“使用模型生成”。生成测试点和测试用例时会使用当前保存的 Ollama 或 OpenAI-compatible API 模型配置。补充需求输入框内容会作为 Prompt 的补充上下文传入模型。
+
 ## 4. Ollama 模式
 
 Ollama 模型列表来自本机命令:
@@ -79,6 +81,8 @@ Ollama 模式和 API 模式互斥, 切换来源后只保留当前模式需要的
 4. Desktop 中选择向量库 `Qdrant`。
 5. Collection 默认使用 `test_agent_desktop`。
 6. 勾选启用向量检索。
+
+点击“测试 RAG”可以验证 Qdrant 和 Ollama embedding 是否可用。仅选择 Qdrant 不会写入向量; 需要在启用向量检索后添加知识库文档, 系统才会生成 embedding 并写入 Qdrant。
 
 Embedding 默认使用 Ollama:
 

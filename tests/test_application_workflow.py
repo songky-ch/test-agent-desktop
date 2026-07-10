@@ -28,6 +28,28 @@ class ApplicationWorkflowTest(unittest.TestCase):
             self.assertEqual(cases[0].case_id, "TC-001")
             self.assertTrue(saved.exists())
 
+    def test_generation_requires_converted_markdown(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            service = ApplicationService(Path(temp_dir))
+
+            with self.assertRaisesRegex(RuntimeError, "请先选择需求文档并转换 Markdown"):
+                service.generate_test_points()
+
+    def test_rule_fallback_uses_current_document_lines(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            requirement = root / "requirement.txt"
+            requirement.write_text("# 课程报名\n登录后报名\n重复报名不允许\n支付超时提示失败", encoding="utf-8")
+            service = ApplicationService(root)
+
+            service.convert_document(requirement)
+            points = service.generate_test_points("兼容移动端", use_rag=False, use_model=False)
+
+            self.assertEqual(points[0].module, "课程报名")
+            self.assertEqual(points[0].function, "登录后报名")
+            self.assertEqual(points[1].function, "重复报名不允许")
+            self.assertIn("兼容移动端", points[0].compatibility_notes)
+
 
 if __name__ == "__main__":
     unittest.main()

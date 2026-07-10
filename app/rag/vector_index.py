@@ -22,6 +22,15 @@ class LocalVectorIndex:
         payload = [record.__dict__ for record in records]
         self.index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    def remove_document(self, document: str) -> None:
+        records = [record for record in self._load_records() if record.document != document]
+        if not records:
+            if self.index_path.exists():
+                self.index_path.unlink()
+            return
+        payload = [record.__dict__ for record in records]
+        self.index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
     def search(self, query_embedding: list[float], top_k: int, threshold: float) -> list[str]:
         scored = []
         for record in self._load_records():

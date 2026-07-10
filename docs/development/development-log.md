@@ -378,3 +378,33 @@ PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compilea
 ```
 
 结果: 31 个测试通过, 编译检查通过。
+
+## 2026-07-10 阶段 8.1: Windows 本地验证问题修复
+
+### 问题确认
+
+- RAG 知识库文档只能添加, 不能删除。
+- 用户直接点击生成测试点或测试用例时, 缺少当前 Markdown 校验和清晰提示。
+- 规则 fallback 生成过弱, 容易让用户误以为没有使用当前需求文档。
+- Qdrant 只配置后端, 缺少连接测试、向量数量和写入状态提示。
+- Skill 缺少扩展说明。
+
+### 修改内容
+
+- RAG 支持移除知识库文档, 同步更新关键词索引和本地向量索引; Qdrant 支持按 `project_id + document` 删除向量。
+- UI 新增“移除选中文档”和“测试 RAG”。
+- RAG 统计新增向量数量展示。
+- 生成测试点前强制要求已转换 Markdown。
+- “使用模型生成”默认勾选, 生成前保存当前 Ollama/API 配置。
+- 直接点击生成测试用例时, 如果还没有测试点, 会先基于当前文档生成测试点。
+- 规则 fallback 改为按当前文档正文拆多个测试点。
+- 新增 `docs/development/skill-extension-guide.md` 说明 Skill 的作用、输入和扩展方式。
+
+### 验证
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compileall app skills
+```
+
+结果: 37 个测试通过, 编译检查通过。
