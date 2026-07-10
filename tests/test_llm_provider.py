@@ -55,6 +55,12 @@ class LlmProviderTest(unittest.TestCase):
         self.assertTrue(client.urls[0].endswith("/api/chat"))
         self.assertTrue(client.urls[1].endswith("/api/generate"))
 
+    def test_ollama_provider_rejects_embedding_model_for_generation(self):
+        provider = OllamaAdapter(ModelConfig(source="ollama", ollama_model="nomic-embed-text"))
+
+        with self.assertRaisesRegex(RuntimeError, "embedding 模型"):
+            provider.chat([LlmMessage(role="user", content="ping")])
+
 
 if __name__ == "__main__":
     unittest.main()

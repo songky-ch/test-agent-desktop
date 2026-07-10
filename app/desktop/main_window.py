@@ -344,7 +344,11 @@ class MainWindow(QMainWindow):
         if not path:
             return
         self._apply_rag_settings()
-        stats = self.service.import_knowledge_document(Path(path))
+        try:
+            stats = self.service.import_knowledge_document(Path(path))
+        except Exception as exc:
+            self._info(str(exc))
+            return
         self.rag_documents.addItem(path)
         self._refresh_rag_stats()
         self._info(f"知识库已导入, 分块数量: {stats.chunk_count}, 向量数量: {stats.vector_count}")
@@ -354,7 +358,11 @@ class MainWindow(QMainWindow):
         if item is None:
             self._info("请先选择要移除的知识库文档")
             return
-        stats = self.service.remove_knowledge_document(Path(item.text()).name)
+        try:
+            stats = self.service.remove_knowledge_document(Path(item.text()).name)
+        except Exception as exc:
+            self._info(str(exc))
+            return
         self.rag_documents.takeItem(self.rag_documents.currentRow())
         self._refresh_rag_stats()
         self._info(f"知识库文档已移除, 当前文档数量: {stats.document_count}")

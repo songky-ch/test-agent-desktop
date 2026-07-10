@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from typing import Optional, Protocol
+from urllib.error import HTTPError, URLError
 from urllib import request
 
 
@@ -21,9 +22,15 @@ class UrlLibQdrantClient:
             headers={"Content-Type": "application/json"},
             method=method,
         )
-        with request.urlopen(req, timeout=60) as response:
-            body = response.read().decode("utf-8")
-            return json.loads(body) if body else {}
+        try:
+            with request.urlopen(req, timeout=60) as response:
+                body = response.read().decode("utf-8")
+                return json.loads(body) if body else {}
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Qdrant HTTP {exc.code}: {detail}") from exc
+        except URLError as exc:
+            raise RuntimeError(f"Qdrant 连接失败: {exc.reason}") from exc
 
 
 @dataclass(frozen=True)
@@ -94,14 +101,19 @@ class QdrantVectorIndex:
         return [item["payload"]["chunk"] for item in response.get("result", [])]
 
     def count(self) -> int:
-        response = self.http_client.request_json(
-            "POST",
-            f"{self._collection_url()}/points/count",
-            {
-                "exact": True,
-                "filter": {"must": [{"key": "project_id", "match": {"value": self.project_id}}]},
-            },
-        )
+        try:
+            response = self.http_client.request_json(
+                "POST",
+                f"{self._collection_url()}/points/count",
+                {
+                    "exact": True,
+                    "filter": {"must": [{"key": "project_id", "match": {"value": self.project_id}}]},
+                },
+            )
+        except Exception as exc:
+            if "HTTP 404" in str(exc):
+                return 0
+            raise
         return int(response.get("result", {}).get("count", 0))
 
     def ping(self) -> None:

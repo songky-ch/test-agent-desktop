@@ -82,6 +82,8 @@ class OllamaAdapter:
         return [parts[0] for parts in lines if parts]
 
     def chat(self, messages: list[LlmMessage]) -> str:
+        if "embed" in self.config.ollama_model.lower():
+            raise RuntimeError("当前选择的是 embedding 模型, 不能用于生成测试点/用例。请在模型配置中选择对话模型, 例如 qwen、llama、mistral 等。")
         payload = {
             "model": self.config.ollama_model,
             "messages": [{"role": message.role, "content": message.content} for message in messages],

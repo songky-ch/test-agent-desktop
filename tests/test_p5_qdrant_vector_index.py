@@ -52,6 +52,19 @@ class QdrantVectorIndexTest(unittest.TestCase):
         self.assertEqual(client.points[0]["payload"]["project_id"], "project-a")
         self.assertEqual(client.calls[2]["payload"]["filter"]["must"][0]["match"]["value"], "project-a")
 
+    def test_qdrant_count_returns_zero_when_collection_missing(self):
+        class MissingCollectionClient:
+            def request_json(self, method, url, payload=None):
+                raise RuntimeError("Qdrant HTTP 404: collection not found")
+
+        index = QdrantVectorIndex(
+            base_url="http://localhost:6333",
+            collection_name="missing",
+            http_client=MissingCollectionClient(),
+        )
+
+        self.assertEqual(index.count(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

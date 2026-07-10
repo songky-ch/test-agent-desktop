@@ -408,3 +408,40 @@ PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compilea
 ```
 
 结果: 37 个测试通过, 编译检查通过。
+
+## 2026-07-10 阶段 8.2: Ollama / Qdrant Windows 错误提示修复
+
+### 问题确认
+
+- 添加 RAG 文档时报 `model nomic-embed-text not found`, 根因是本机 Ollama 未安装 embedding 模型。
+- 拆解测试点时报 HTTP 404, 常见原因是把 embedding 模型选成了主生成模型, 或本地 Ollama 生成模型未安装。
+- Qdrant collection 未创建时, 统计接口可能返回 404, 不应直接打断 UI。
+
+### 修改内容
+
+- `OllamaEmbeddingAdapter` 兼容 `/api/embed` 和旧版 `/api/embeddings`。
+- embedding 模型不可用时, 明确提示执行 `ollama pull <model>`。
+- 主生成模型如果选择了 embedding 模型, 直接提示用户改选对话模型。
+- Qdrant 统计遇到 collection 404 时返回 0, 不再中断 UI。
+- RAG 导入和删除增加 UI 异常提示。
+
+### 本地配置要求
+
+Ollama 至少需要两类模型:
+
+```bash
+ollama pull qwen2.5:7b
+ollama pull nomic-embed-text
+```
+
+- `qwen2.5:7b` 这类对话模型用于生成测试点和测试用例。
+- `nomic-embed-text` 用于 RAG 向量化。
+
+### 验证
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compileall app skills
+```
+
+结果: 41 个测试通过, 编译检查通过。

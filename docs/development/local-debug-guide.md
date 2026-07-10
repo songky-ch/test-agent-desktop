@@ -59,6 +59,14 @@ ollama list
 
 Desktop 只展示本地已安装模型。没有安装 Ollama 或没有模型时, 下拉列表会为空。
 
+生成测试点和测试用例需要选择对话模型, 例如:
+
+```bash
+ollama pull qwen2.5:7b
+```
+
+不要把 `nomic-embed-text` 选为主生成模型。它是 embedding 模型, 只用于 RAG 向量化。
+
 ## 5. OpenAI-compatible API 模式
 
 API 模式需要配置:
@@ -90,6 +98,14 @@ Embedding 默认使用 Ollama:
 ollama pull nomic-embed-text
 ollama serve
 ```
+
+如果添加知识库时报 `model nomic-embed-text not found`, 说明本机还没有安装 embedding 模型, 先执行:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+如果拆解测试点时报 404, 先确认模型配置中选择的是对话模型, 不是 embedding 模型。
 
 ## 7. PyInstaller 打包
 
