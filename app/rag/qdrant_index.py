@@ -38,10 +38,12 @@ class QdrantVectorIndex:
         self,
         base_url: str,
         collection_name: str,
+        project_id: str = "default",
         http_client: Optional[QdrantHttpClient] = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.collection_name = collection_name
+        self.project_id = project_id
         self.http_client = http_client or UrlLibQdrantClient()
 
     def save_document(self, document: str, chunks: list[str], embeddings: list[list[float]]) -> None:
@@ -54,7 +56,7 @@ class QdrantVectorIndex:
                 {
                     "id": self._point_id(document, chunk),
                     "vector": embedding,
-                    "payload": {"document": document, "chunk": chunk},
+                    "payload": {"project_id": self.project_id, "document": document, "chunk": chunk},
                 }
             )
         self.http_client.request_json(
@@ -72,6 +74,7 @@ class QdrantVectorIndex:
                 "limit": top_k,
                 "score_threshold": threshold,
                 "with_payload": True,
+                "filter": {"must": [{"key": "project_id", "match": {"value": self.project_id}}]},
             },
         )
         return [item["payload"]["chunk"] for item in response.get("result", [])]

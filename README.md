@@ -21,11 +21,16 @@
 - 测试点确认与用例模板: 结构化测试点表格、模板字段导出、模型 Prompt 字段约束。
 - RAG 增强: Ollama embedding、本地 JSON 向量索引、Qdrant、Top-K 和相似度阈值。
 - Windows Qdrant: 直接运行本地 `qdrant.exe`, 默认连接 `http://localhost:6333`。
+- Skill 深度接入: UI 展示并执行 Skill, 内置用例生成、缺陷分析、接口测试设计示例。
+- P7 本地运行体验: PyInstaller 打包配置、示例需求/知识库、本地启动与调试手册、最终差距自检。
+- P8 本地可用性完善: Prompt 文件化、API Key keyring 安全存储、Qdrant 项目级过滤、Skill 结构化错误、LangGraph 可选适配入口。
 
 ## 开发文档
 
 - [开发记录](docs/development/development-log.md)
 - [架构开发路线](docs/development/architecture-roadmap.md)
+- [本地启动与调试手册](docs/development/local-debug-guide.md)
+- [P7 最终差距自检](docs/development/final-gap-check.md)
 
 ## 本地启动
 
@@ -43,7 +48,30 @@ python3 -m unittest discover -s tests
 python3 -m compileall app
 ```
 
-当前测试数: 28。
+当前测试数: 31。
+
+## P8 可选依赖
+
+默认安装已包含 keyring, API Key 会优先写入系统密钥管理。LangGraph 作为可选依赖安装:
+
+```bash
+python -m pip install -e ".[p8]"
+```
+
+## 打包
+
+```bash
+python -m pip install -e ".[packaging]"
+pyinstaller packaging/test-agent-desktop.spec --noconfirm
+```
+
+产物目录: `dist/TestAgentDesktop/`。
+
+## 示例资料
+
+- 示例需求: `examples/requirements/online-education-requirement.md`
+- 示例知识库: `examples/knowledge/defect-history.md`
+- 接口测试规范: `examples/knowledge/api-guidelines.md`
 
 ## 目录
 
@@ -64,5 +92,12 @@ data/
   outputs/
 skills/
   generate_test_cases/
+  analyze_defects/
+  api_test_design/
+examples/
+  requirements/
+  knowledge/
+packaging/
+prompts/
 tests/
 ```

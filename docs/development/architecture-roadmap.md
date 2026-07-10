@@ -59,15 +59,30 @@
 
 状态: 已完成第一版。支持本地 JSON 向量索引和 Windows 本地 Qdrant。
 
-## P6 下一步: Skill 深度接入
+## P6 已完成: Skill 深度接入
 
 - UI 展示已加载 Skill。
 - 允许用户选择 Skill 生成结果。
 - 内置 `generate_test_cases`, `analyze_defects`, `api_test_design`。
 
-## P7 下一步: 打包与本地运行体验
+状态: 已完成第一版。插件市场和权限管理不在当前范围。
+
+## P7 已完成: 打包与本地运行体验
 
 - PyInstaller 配置。
 - 示例需求文档。
 - 示例知识库。
 - 本地启动和调试手册。
+
+状态: 已完成第一版。目标系统打包实测和安装包形态优化放入 P8。
+
+## P8 已完成: 本地可用性完善
+
+- 模型生成 Prompt 文件化。
+- API Key 优先写入系统 keyring, 不可用时回退到本地配置文件。
+- Qdrant 向量召回增加 `project_id` payload 过滤。
+- Skill 执行结果统一为 `ok/result/error_type/message` 结构。
+- UI 格式化展示 Skill JSON 结果。
+- LangGraph 增加可选适配入口。
+
+状态: 已完成第一版。Windows/macOS 打包产物仍需在目标系统实测。

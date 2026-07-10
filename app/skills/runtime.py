@@ -5,6 +5,10 @@ from types import ModuleType
 from app.models.entities import Skill
 
 
+class SkillRuntimeError(RuntimeError):
+    pass
+
+
 class SkillRuntime:
     def __init__(self, skills_dir: Path):
         self.skills_dir = Path(skills_dir)
@@ -29,9 +33,20 @@ class SkillRuntime:
         return skills
 
     def invoke(self, skill_name: str, payload: dict):
-        skill = self._find_skill(skill_name)
-        module = self._load_module(skill.path / skill.entry)
-        return module.run(payload)
+        try:
+            skill = self._find_skill(skill_name)
+            module = self._load_module(skill.path / skill.entry)
+            result = module.run(payload)
+        except Exception as exc:
+            return {
+                "ok": False,
+                "skill": skill_name,
+                "error_type": exc.__class__.__name__,
+                "message": str(exc),
+            }
+        if isinstance(result, dict):
+            return {"ok": True, "skill": skill_name, "result": result}
+        return {"ok": True, "skill": skill_name, "result": {"value": result}}
 
     def _find_skill(self, skill_name: str) -> Skill:
         for skill in self.list_skills():

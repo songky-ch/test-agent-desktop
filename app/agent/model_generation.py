@@ -1,5 +1,7 @@
 import json
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
 
 from app.agent.llm_provider import LlmMessage, ModelRouter
 from app.models.entities import CaseTemplate, RequirementContext, TestCase, TestPoint
@@ -17,9 +19,15 @@ class ModelGenerationResult:
 
 
 class ModelGenerationService:
-    def __init__(self, router: ModelRouter, case_template: CaseTemplate = DEFAULT_CASE_TEMPLATE):
+    def __init__(
+        self,
+        router: ModelRouter,
+        case_template: CaseTemplate = DEFAULT_CASE_TEMPLATE,
+        prompt_path: Optional[Path] = None,
+    ):
         self.router = router
         self.case_template = case_template
+        self.prompt_path = prompt_path or Path(__file__).parents[2] / "prompts" / "model_generation.md"
 
     def generate(self, context: RequirementContext) -> ModelGenerationResult:
         content = self.router.chat(self._messages(context))
@@ -30,16 +38,7 @@ class ModelGenerationService:
         )
 
     def _messages(self, context: RequirementContext) -> list[LlmMessage]:
-        prompt = (
-            "你是测试人员专属 AI Agent。请基于需求文档、补充需求和 RAG 上下文生成测试点和测试用例。\n"
-            "只输出 JSON, 不要输出 Markdown, 不要解释。\n"
-            "JSON 结构必须包含 test_points 和 test_cases 两个数组。\n"
-            "test_points 字段: module, function, positive_scenarios, negative_scenarios, "
-            "boundary_scenarios, exception_scenarios, data_checks, permission_checks, compatibility_notes。\n"
-            "test_cases 字段: case_id, module, function, precondition, steps, expected_results, "
-            "priority, case_type, remark。\n"
-            f"当前用户用例模板字段顺序: {', '.join(case_template_labels(self.case_template))}。\n"
-        )
+        prompt = self._load_prompt()
         user = (
             f"需求文档:\n{context.markdown}\n\n"
             f"补充需求:\n{context.supplemental}\n\n"
@@ -49,6 +48,22 @@ class ModelGenerationService:
             LlmMessage(role="system", content=prompt),
             LlmMessage(role="user", content=user),
         ]
+
+    def _load_prompt(self) -> str:
+        template_fields = ", ".join(case_template_labels(self.case_template))
+        if self.prompt_path.exists():
+            template = self.prompt_path.read_text(encoding="utf-8")
+            return template.replace("{{case_template_fields}}", template_fields)
+        return (
+            "你是测试人员专属 AI Agent。请基于需求文档、补充需求和 RAG 上下文生成测试点和测试用例。\n"
+            "只输出 JSON, 不要输出 Markdown, 不要解释。\n"
+            "JSON 结构必须包含 test_points 和 test_cases 两个数组。\n"
+            "test_points 字段: module, function, positive_scenarios, negative_scenarios, "
+            "boundary_scenarios, exception_scenarios, data_checks, permission_checks, compatibility_notes。\n"
+            "test_cases 字段: case_id, module, function, precondition, steps, expected_results, "
+            "priority, case_type, remark。\n"
+            f"当前用户用例模板字段顺序: {template_fields}。\n"
+        )
 
     def _parse_json(self, content: str) -> dict:
         cleaned = content.strip()

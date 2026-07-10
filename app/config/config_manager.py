@@ -1,6 +1,28 @@
 from dataclasses import asdict, dataclass
 from pathlib import Path
 import json
+from typing import Optional, Protocol
+
+
+class SecretStore(Protocol):
+    def set_password(self, service_name: str, username: str, password: str) -> None:
+        ...
+
+    def get_password(self, service_name: str, username: str) -> Optional[str]:
+        ...
+
+
+class KeyringSecretStore:
+    def __init__(self):
+        import keyring
+
+        self.keyring = keyring
+
+    def set_password(self, service_name: str, username: str, password: str) -> None:
+        self.keyring.set_password(service_name, username, password)
+
+    def get_password(self, service_name: str, username: str) -> Optional[str]:
+        return self.keyring.get_password(service_name, username)
 
 
 @dataclass(frozen=True)
@@ -29,18 +51,36 @@ class ModelConfig:
 
 
 class ConfigManager:
-    def __init__(self, config_path: Path):
+    service_name = "test-agent-desktop"
+
+    def __init__(self, config_path: Path, secret_store: Optional[SecretStore] = None):
         self.config_path = Path(config_path)
+        self.secret_store = secret_store if secret_store is not None else self._default_secret_store()
 
     def save_model_config(self, config: ModelConfig) -> None:
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        self.config_path.write_text(json.dumps(asdict(config), ensure_ascii=False, indent=2), encoding="utf-8")
+        data = asdict(config)
+        if config.source == "openai_compatible" and config.api_key and self._save_secret(config.api_key):
+            data["api_key"] = ""
+            data["api_key_storage"] = "keyring"
+        self.config_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def load_model_config(self) -> ModelConfig:
         if not self.config_path.exists():
             return ModelConfig()
         data = json.loads(self.config_path.read_text(encoding="utf-8"))
-        return self._normalize_config(data)
+        config = self._normalize_config(data)
+        if config.source == "openai_compatible" and not config.api_key:
+            secret = self._load_secret()
+            if secret:
+                return ModelConfig(
+                    source=config.source,
+                    ollama_model=config.ollama_model,
+                    api_base_url=config.api_base_url,
+                    api_key=secret,
+                    api_model=config.api_model,
+                )
+        return config
 
     def _normalize_config(self, data: dict) -> ModelConfig:
         if "source" in data:
@@ -57,3 +97,29 @@ class ConfigManager:
             api_key=data.get("api_key", ""),
             api_model=data.get("model", ""),
         )
+
+    def _secret_username(self) -> str:
+        return str(self.config_path)
+
+    def _save_secret(self, api_key: str) -> bool:
+        if self.secret_store is None:
+            return False
+        try:
+            self.secret_store.set_password(self.service_name, self._secret_username(), api_key)
+        except Exception:
+            return False
+        return True
+
+    def _load_secret(self) -> Optional[str]:
+        if self.secret_store is None:
+            return None
+        try:
+            return self.secret_store.get_password(self.service_name, self._secret_username())
+        except Exception:
+            return None
+
+    def _default_secret_store(self) -> Optional[SecretStore]:
+        try:
+            return KeyringSecretStore()
+        except Exception:
+            return None

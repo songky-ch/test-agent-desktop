@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 from app.config.config_manager import ModelConfig
 from app.services.application_service import ApplicationService
@@ -57,6 +58,8 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel("模型状态: 未测试")
         self.rag_documents = QListWidget()
         self.rag_stats_label = QLabel("知识库统计\n文档数量: 0\n分块数量: 0\n索引路径: -")
+        self.skill_selector = QComboBox()
+        self.skill_result = QPlainTextEdit()
         self._build_window()
         self._load_config()
 
@@ -108,6 +111,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(top)
         layout.addWidget(self._supplemental_panel())
         layout.addWidget(self._output_tabs(), 1)
+        layout.addWidget(self._skill_panel())
         return panel
 
     def _upload_panel(self) -> QWidget:
@@ -225,6 +229,22 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.rag_stats_label)
         return panel
 
+    def _skill_panel(self) -> QWidget:
+        panel = QFrame()
+        panel.setFrameShape(QFrame.StyledPanel)
+        layout = QHBoxLayout(panel)
+        refresh = QPushButton("刷新 Skills")
+        run = QPushButton("执行 Skill")
+        refresh.clicked.connect(self._refresh_skills)
+        run.clicked.connect(self._run_selected_skill)
+        self.skill_result.setReadOnly(True)
+        layout.addWidget(QLabel("Skill"))
+        layout.addWidget(self.skill_selector)
+        layout.addWidget(refresh)
+        layout.addWidget(run)
+        layout.addWidget(self.skill_result, 1)
+        return panel
+
     def _load_config(self) -> None:
         config = self.service.load_model_config()
         self._refresh_ollama_models()
@@ -237,6 +257,7 @@ class MainWindow(QMainWindow):
         self.source.setCurrentText("Ollama" if config.source == "ollama" else "OpenAI-compatible")
         self._update_model_source_view(self.source.currentText())
         self.case_template_fields.setText("用例编号,所属模块,功能点,前置条件,测试步骤,预期结果,优先级,类型,备注")
+        self._refresh_skills()
 
     def _save_config(self) -> None:
         if self.source.currentText() == "Ollama":
@@ -415,6 +436,7 @@ class MainWindow(QMainWindow):
             vector_backend="qdrant" if self.vector_backend.currentText() == "Qdrant" else "local",
             qdrant_url=self.qdrant_url.text() or "http://localhost:6333",
             qdrant_collection=self.qdrant_collection.text() or "test_agent_desktop",
+            project_id=self.service.root_dir.name or "default",
         )
 
     def _int_value(self, value: str, fallback: int) -> int:
@@ -449,6 +471,43 @@ class MainWindow(QMainWindow):
                 item[key] = cell.text() if cell else ""
             rows.append(item)
         self.service.sync_cases_from_rows(rows)
+
+    def _refresh_skills(self) -> None:
+        current = self.skill_selector.currentText()
+        self.skill_selector.clear()
+        for skill in self.service.list_skills():
+            self.skill_selector.addItem(skill.name)
+        if current and self.skill_selector.findText(current) != -1:
+            self.skill_selector.setCurrentText(current)
+
+    def _run_selected_skill(self) -> None:
+        skill_name = self.skill_selector.currentText()
+        if not skill_name:
+            self._info("请先选择 Skill")
+            return
+        result = self.service.run_skill(skill_name, self._skill_payload())
+        self.skill_result.setPlainText(json.dumps(result, ensure_ascii=False, indent=2))
+        if result.get("ok"):
+            self._info(f"Skill 已执行: {skill_name}")
+        else:
+            self._info(f"Skill 执行失败: {result.get('message', '')}")
+
+    def _skill_payload(self) -> dict:
+        return {
+            "supplemental": self.supplemental_input.toPlainText(),
+            "points": [
+                {"module": point.module, "function": point.function}
+                for point in self.service.current_points
+            ],
+            "cases": [
+                {"case_id": case.case_id, "module": case.module, "function": case.function}
+                for case in self.service.current_cases
+            ],
+            "items": [
+                {"module": case.module, "title": case.function, "priority": case.priority}
+                for case in self.service.current_cases
+            ],
+        }
 
     def _info(self, message: str) -> None:
         QMessageBox.information(self, "Test Agent Desktop", message)

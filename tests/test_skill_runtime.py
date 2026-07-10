@@ -27,7 +27,10 @@ class SkillRuntimeTest(unittest.TestCase):
             runtime = SkillRuntime(root / "skills")
 
             self.assertEqual([skill.name for skill in runtime.list_skills()], ["generate_test_cases"])
-            self.assertEqual(runtime.invoke("generate_test_cases", {"name": "case"}), {"received": "case"})
+            result = runtime.invoke("generate_test_cases", {"name": "case"})
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["result"], {"received": "case"})
 
 
 if __name__ == "__main__":

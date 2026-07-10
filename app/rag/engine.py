@@ -27,6 +27,7 @@ class RagEngine:
         vector_backend: str = "local",
         qdrant_url: str = "http://localhost:6333",
         qdrant_collection: str = "test_agent_desktop",
+        project_id: str = "default",
         qdrant_client: Optional[QdrantHttpClient] = None,
     ):
         self.knowledge_dir = Path(knowledge_dir)
@@ -38,6 +39,7 @@ class RagEngine:
         self.vector_backend = vector_backend
         self.qdrant_url = qdrant_url
         self.qdrant_collection = qdrant_collection
+        self.project_id = project_id
         self.qdrant_client = qdrant_client
         self.vector_index = self._create_vector_index()
 
@@ -137,6 +139,7 @@ class RagEngine:
             return QdrantVectorIndex(
                 base_url=self.qdrant_url,
                 collection_name=self.qdrant_collection,
+                project_id=self.project_id,
                 http_client=self.qdrant_client,
             )
         return LocalVectorIndex(self._vector_index_path())

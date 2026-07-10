@@ -34,6 +34,7 @@ class QdrantVectorIndexTest(unittest.TestCase):
         index = QdrantVectorIndex(
             base_url="http://localhost:6333",
             collection_name="test_agent",
+            project_id="project-a",
             http_client=client,
         )
 
@@ -48,6 +49,8 @@ class QdrantVectorIndexTest(unittest.TestCase):
         self.assertEqual(index.count(), 2)
         self.assertEqual(client.calls[0]["method"], "PUT")
         self.assertIn("/collections/test_agent", client.calls[0]["url"])
+        self.assertEqual(client.points[0]["payload"]["project_id"], "project-a")
+        self.assertEqual(client.calls[2]["payload"]["filter"]["must"][0]["match"]["value"], "project-a")
 
 
 if __name__ == "__main__":

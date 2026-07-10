@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 from typing import Optional
 
 from app.agent.llm_provider import LlmMessage, ModelRouter, OllamaAdapter, UrlLibHttpClient
@@ -7,7 +8,7 @@ from app.agent.orchestrator import AgentOrchestrator
 from app.agent.workflow import AgentWorkflow, WorkflowState
 from app.config.config_manager import ConfigManager, ModelConfig
 from app.documents.pipeline import DocumentPipeline
-from app.models.entities import CaseTemplate, ConnectionTestResult, MarkdownDocument, RequirementContext, TestCase, TestPoint
+from app.models.entities import CaseTemplate, ConnectionTestResult, MarkdownDocument, RequirementContext, Skill, TestCase, TestPoint
 from app.rag.embeddings import OllamaEmbeddingAdapter
 from app.rag.engine import RagEngine
 from app.services.export_service import CASE_FIELD_KEYS_BY_LABEL, DEFAULT_CASE_TEMPLATE, ExportService
@@ -42,6 +43,14 @@ class ApplicationService:
     def list_ollama_models(self) -> list[str]:
         return OllamaAdapter(ModelConfig(source="ollama")).list_models()
 
+    def list_skills(self) -> list[Skill]:
+        return self.skills.list_skills()
+
+    def run_skill(self, skill_name: str, payload: dict) -> dict:
+        result = self.skills.invoke(skill_name, payload)
+        self._save_skill_result(skill_name, result)
+        return result
+
     def convert_document(self, source_path: Path) -> MarkdownDocument:
         self.current_markdown = self.documents.convert_to_markdown(source_path)
         return self.current_markdown
@@ -62,6 +71,7 @@ class ApplicationService:
         vector_backend: str = "local",
         qdrant_url: str = "http://localhost:6333",
         qdrant_collection: str = "test_agent_desktop",
+        project_id: str = "default",
         embedding_adapter=None,
         qdrant_client=None,
     ) -> None:
@@ -75,6 +85,7 @@ class ApplicationService:
         self.rag.vector_backend = vector_backend
         self.rag.qdrant_url = qdrant_url
         self.rag.qdrant_collection = qdrant_collection
+        self.rag.project_id = project_id
         self.rag.qdrant_client = qdrant_client
         self.rag.vector_index = self.rag._create_vector_index()
 
@@ -186,3 +197,10 @@ class ApplicationService:
 
     def _split_lines(self, value: str) -> list[str]:
         return [line.strip() for line in value.splitlines() if line.strip()]
+
+    def _save_skill_result(self, skill_name: str, result: dict) -> Path:
+        output_dir = self.root_dir / "data" / "outputs" / "skills"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output = output_dir / f"{skill_name}.json"
+        output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        return output

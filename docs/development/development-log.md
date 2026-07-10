@@ -271,9 +271,110 @@ PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compilea
 
 结果: 28 个测试通过, 编译检查通过。
 
+## 2026-07-10 阶段 6: Skill 深度接入
+
+### 目标
+
+让 Skill 不只存在于后端加载机制中, 而是能在 Desktop UI 中展示、选择、执行, 并把执行结果落到本地结果目录。
+
+### 修改内容
+
+- `app/services/application_service.py`: 新增 `list_skills` 和 `run_skill`, Skill 执行结果保存到 `data/outputs/skills/<skill>.json`。
+- `app/desktop/main_window.py`: 新增 Skill 下拉、刷新按钮、执行按钮和结果预览。
+- `skills/analyze_defects`: 新增缺陷分析示例 Skill。
+- `skills/api_test_design`: 新增接口测试设计示例 Skill。
+- `tests/test_p6_skill_integration.py`: 覆盖 Skill 列表、执行和结果保存。
+
+### 设计判断
+
+- 保留现有目录式 Skill 协议: `skill.yaml + prompt.md + handler.py`。
+- P6 首版不做插件市场和权限管理。
+- UI 执行 Skill 使用当前补充说明、测试点、用例组装 payload, 保持 Skill 与主流程数据打通。
+
+### 验证
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compileall app skills
+```
+
+结果: 29 个测试通过, 编译检查通过。
+
 ### 暂不进入
 
 - 企业账号、多人协作、权限系统。
 - 自动执行测试。
 - 插件市场。
 - FAISS/Chroma 后续作为 `RagEngine` 的可选替换实现接入。
+
+## 2026-07-10 阶段 7: 打包与本地运行体验
+
+### 目标
+
+补齐一期最后的本地交付体验, 让项目不仅能开发运行, 也能被用户按手册试跑、导入样例、执行打包, 并明确当前代码和 PRD 之间的剩余差距。
+
+### 修改内容
+
+- `packaging/test-agent-desktop.spec`: 新增 PyInstaller 打包配置, 打包时带上 `skills/`、`assets/`、`examples/`。
+- `examples/requirements/online-education-requirement.md`: 新增可直接上传的需求样例。
+- `examples/knowledge/defect-history.md`: 新增历史缺陷知识库样例。
+- `examples/knowledge/api-guidelines.md`: 新增接口测试规范知识库样例。
+- `docs/development/local-debug-guide.md`: 新增本地启动、PyCharm 调试、Ollama、API、Qdrant、打包和常见问题手册。
+- `docs/development/final-gap-check.md`: 新增 PRD 与代码最终差距自检。
+- `pyproject.toml`: 新增 `packaging` 可选依赖, 用于安装 PyInstaller。
+
+### 设计判断
+
+- PyInstaller 作为可选依赖, 不进入默认安装链路, 避免影响日常开发启动。
+- 示例资料选择在线教育报名场景, 因为它同时覆盖登录、权限、重复提交、库存、支付、订单状态、移动端兼容等典型测试点。
+- P7 不把未验证的打包产物描述为已验证安装包, 只交付可执行 spec 和本地打包手册。
+
+### 最终自检结论
+
+一期主链路已经闭合:
+
+```text
+文档上传 -> Markdown -> 补充需求 -> RAG -> 测试点 -> 用例 -> Skill -> 导出 -> 打包配置
+```
+
+仍建议后续进入 P8 的内容:
+
+- 目标 Windows/macOS 打包产物实测。
+- LangGraph 真实依赖接入。
+- Qdrant payload 过滤。
+- Skill 结构化错误展示。
+- 模型 Prompt 文件化。
+- API Key 安全存储。
+
+## 2026-07-10 阶段 8: 本地可用性完善
+
+### 目标
+
+沿 P7 自检方向继续补齐本地可直接使用时最容易卡住的点: 配置安全、Prompt 可维护、RAG 项目隔离、Skill 错误可读、LangGraph 后续接入入口。
+
+### 修改内容
+
+- `prompts/model_generation.md`: 模型生成 Prompt 从代码中外置。
+- `ModelGenerationService`: 支持读取外置 Prompt, 并注入中文用例模板字段。
+- `ConfigManager`: API Key 优先写入系统 keyring, keyring 不可用时回退本地配置文件。
+- `QdrantVectorIndex`: payload 增加 `project_id`, search 请求增加 project filter。
+- `ApplicationService.configure_rag`: 支持传入 `project_id`。
+- `SkillRuntime`: Skill 执行统一返回 `ok/result/error_type/message` 结构。
+- `MainWindow`: Skill 输出改为格式化 JSON, 失败时展示失败信息。
+- `LangGraphAgentWorkflow`: 新增可选 LangGraph 适配入口。
+- `pyproject.toml`: 默认依赖加入 keyring, `p8` 可选依赖加入 LangGraph。
+
+### 设计判断
+
+- API Key 安全存储不能成为本地启动阻塞点, 所以 keyring 失败时允许回退。
+- Qdrant 过滤使用 `project_id`, 先解决多项目共用 collection 的召回污染问题。
+- LangGraph 作为可选适配入口存在, UI 默认仍走稳定状态机, 避免用户未安装可选依赖时启动失败。
+
+### 验证
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+PYTHONPYCACHEPREFIX=/private/tmp/test-agent-pycache .venv/bin/python -m compileall app skills
+```
+
+结果: 31 个测试通过, 编译检查通过。

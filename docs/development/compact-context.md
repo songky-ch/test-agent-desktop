@@ -25,6 +25,12 @@ Document -> Markdown Store -> RAG -> Agent -> Model Router -> Result Store -> UI
 - ResultStore JSON 持久化。
 - Markdown/Excel 导出服务。
 - `pip install -e .` 包发现问题已修复。
+- P3 UI 完整联动: 知识库导入、RAG 统计刷新、模型连接测试、Markdown/Excel 导出选择、结果持久化。
+- P4 测试点确认与用例模板: 测试点结构化表格、中文模板字段、模板字段影响导出和模型 Prompt。
+- P5 RAG 增强: Ollama embedding、本地 JSON 向量索引、Windows 本地 Qdrant REST 适配、Top-K 和相似度阈值。
+- P6 Skill 深度接入: UI 展示、选择、执行 Skill, 内置用例生成、缺陷分析、接口测试设计。
+- P7 本地运行体验: PyInstaller 打包配置、示例需求/知识库、本地调试手册、最终差距自检。
+- P8 本地可用性完善: Prompt 文件化、API Key keyring 安全存储、Qdrant project_id 过滤、Skill 结构化错误、LangGraph 可选适配入口。
 
 ## 最新 PRD 变化
 
@@ -43,15 +49,7 @@ Document -> Markdown Store -> RAG -> Agent -> Model Router -> Result Store -> UI
 
 ## 当前下一阶段
 
-进入 P2: 真实 Agent 生成链路。
-
-目标:
-
-- 增加 Prompt 模板。
-- 用 ModelRouter 调用真实模型。
-- 解析模型输出 JSON。
-- 失败时返回清晰错误, 不静默吞掉。
-- 保留规则生成作为无模型配置时的本地可运行路径。
+P0 到 P8 本地可用主链路已经闭合。下一步建议做目标系统实测: Windows Qdrant/Ollama、PyInstaller 打包产物、真实 API 模型调用。
 
 ## 开发约束
 
